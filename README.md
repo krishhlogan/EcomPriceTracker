@@ -1,3 +1,3 @@
 # EcomPriceTracker
 
-celery -A ecom_price_tracker worker --loglevel=info
+ celery -A ecom_price_tracker worker --pool=solo --loglevel=info
