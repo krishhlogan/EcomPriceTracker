@@ -5,10 +5,14 @@ from .models import Watchlist, SearchQueue, Product
 from .services.scraper import ScraperEngine
 from .services.product_service import ProductService
 from .services.html_parser import FlipkartParser
+from .services.notification import Notify
 
 
 def get_scraper():
     return ScraperEngine(parser=FlipkartParser(), product_service=ProductService())
+
+def get_notification_engine():
+    return Notify(notification_engine=None)
 
 
 @shared_task
@@ -31,8 +35,9 @@ def scrape_watchlisted_products():
             scraped_price = 25000.00
             if scraped_price is not None and item.desired_price is not None:
                 if scraped_price <= item.desired_price:
-                    print(f"🔔 ALERT: {product.title} has dropped to ₹{scraped_price}, "
-                          f"which is below your target ₹{item.desired_price}")
+                    message = f"""🔔 ALERT: {product.title} has dropped to ₹{scraped_price}, "
+                          which is below your target ₹{item.desired_price}"""
+                    Notify.notify_user(item.username, message)
 
             # Update the product in DB
             engine.product_service.update_product(product_info, product)
