@@ -24,3 +24,18 @@ class ScraperEngine:
             page += 1
             if page == 3:
                 break
+
+    def scrape_from_url(self, product_url):
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        try:
+            resp = requests.get(product_url, headers=headers)
+            if resp.status_code == 200:
+                product_soup = BeautifulSoup(resp.content, 'html.parser')
+                product_info = self.parser.parse_product_page(product_soup)
+                return product_info
+            print('failed to scrape from url',resp.status_code)
+            return {}
+        except Exception as e:
+            print("Error fetching seller:", e)
+        return 'N/A'
+
