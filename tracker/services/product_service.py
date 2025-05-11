@@ -3,6 +3,7 @@ from .interfaces import IProductService
 
 class ProductService(IProductService):
     def save_product(self, data):
+        print('data',data)
         product, created = Product.objects.get_or_create(title=data['title'], defaults={
             'rating': data['rating'],
             'num_reviews': data['total_reviews'],

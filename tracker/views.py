@@ -29,7 +29,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         paginator = ProductPagination()
         paginated_products = paginator.paginate_queryset(matching_products, request)
 
-        if matching_products.exists():
+        if paginated_products:
             for product in matching_products:
                 increment_search_count.apply_async(args=[product.id])
             if paginated_products:

@@ -52,7 +52,7 @@ class FlipkartParser:
 
             parsed_items.append({
                 'title': title_tag.get_text(strip=True) if title_tag else 'N/A',
-                'price': price,
+                'price': price if price else -1,
                 'rating': rating_tag.get_text(strip=True) if rating_tag else -1,
                 'total_ratings': total_ratings,
                 'total_reviews': total_reviews,
