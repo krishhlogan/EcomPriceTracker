@@ -64,6 +64,18 @@ class FlipkartParser:
             print("Error fetching seller:", e)
         return 'N/A'
 
+    def get_data_from_url(self, product_url):
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        try:
+            resp = requests.get(product_url, headers=headers)
+            if resp.status_code == 200:
+                product_soup = BeautifulSoup(resp.content, 'html.parser')
+                seller_tag = product_soup.find('div', {'id': 'sellerName'})
+                # print(product_url,seller_tag)
+                return seller_tag.get_text(strip=True) if seller_tag else 'N/A'
+        except Exception as e:
+            print("Error fetching seller:", e)
+        return 'N/A'
 #
 # def scrape_flipkart(keyword):
 #     headers = {'User-Agent': 'Mozilla/5.0'}

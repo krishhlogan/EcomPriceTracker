@@ -1,20 +1,53 @@
 from celery import shared_task
+from django.utils.timezone import now
+from datetime import timedelta
 from .models import Watchlist, SearchQueue, Product
 from .services.scraper import ScraperEngine
 from .services.product_service import ProductService
 from .services.html_parser import FlipkartParser
 
-@shared_task
-def scheduled_scrape():
-    keywords = list(Watchlist.objects.values_list('product__title', flat=True))
-    queued_keywords = list(SearchQueue.objects.filter(is_scraped=False).values_list('keyword', flat=True))
-    print('Processing keywords',keywords+queued_keywords)
-    # print('Keywords to be processed',[word.product.title for word in keywords] + [word.keyword for word in queued_keywords])
-    engine = ScraperEngine(parser=FlipkartParser(), product_service=ProductService())
 
-    for keyword in set(keywords + queued_keywords):
-        engine.scrape(keyword)
-        SearchQueue.objects.filter(keyword=keyword).update(is_scraped=True)
+def get_scraper():
+    return ScraperEngine(parser=FlipkartParser(), product_service=ProductService())
+
+
+@shared_task
+def scrape_watchlisted_products():
+    engine = get_scraper()
+    product_ids = Watchlist.objects.values_list('product_id', flat=True).distinct()
+    products = Product.objects.filter(id__in=product_ids)
+
+    for product in products:
+        if product.product_link:
+            print(f"Scraping watchlisted product: {product.title}")
+            engine.scrape_product_url(product.product_link)
+
+
+@shared_task
+def scrape_popular_products():
+    engine = get_scraper()
+    products = Product.objects.all()
+
+    for product in products:
+        if should_scrape(product):
+            print(f"Scraping popular product: {product.title}")
+            if product.product_link:
+                engine.scrape_product_url(product.product_link)
+            else:
+                engine.scrape(product.title)  # fallback
+
+
+@shared_task
+def scrape_search_queue():
+    engine = get_scraper()
+    queue_items = SearchQueue.objects.filter(is_scraped=False)
+
+    for item in queue_items:
+        print(f"Scraping search queue keyword: {item.keyword}")
+        engine.scrape(item.keyword)
+        item.is_scraped = True
+        item.save()
+
 
 @shared_task
 def increment_search_count(product_id):
@@ -24,4 +57,12 @@ def increment_search_count(product_id):
         product.save()
     except Product.DoesNotExist:
         print(f'Product does not exist in db: {product_id}')
-        pass  # Handle the case where the product doesn't exist
+
+
+def should_scrape(product):
+    if product.search_count >= 50:
+        return (now() - product.last_scraped) > timedelta(hours=1)
+    elif product.search_count >= 10:
+        return (now() - product.last_scraped) > timedelta(hours=6)
+    else:
+        return (now() - product.last_scraped) > timedelta(days=1)
