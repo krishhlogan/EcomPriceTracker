@@ -13,18 +13,34 @@ def get_scraper():
 
 @shared_task
 def scrape_watchlisted_products():
+    print('Running scrape watchlisted products')
     engine = get_scraper()
-    product_ids = Watchlist.objects.values_list('product_id', flat=True).distinct()
-    products = Product.objects.filter(id__in=product_ids)
 
-    for product in products:
+    watchlisted = Watchlist.objects.select_related('product').all()
+
+    for item in watchlisted:
+        print('item',item)
+        product = item.product
+
         if product.product_link:
             print(f"Scraping watchlisted product: {product.title}")
-            engine.scrape_product_url(product.product_link)
+            product_info = engine.scrape_from_url(product.product_link)
+
+            # Notify if price is below target
+            scraped_price = product_info.get("price")
+            scraped_price = 25000.00
+            if scraped_price is not None and item.desired_price is not None:
+                if scraped_price <= item.desired_price:
+                    print(f"🔔 ALERT: {product.title} has dropped to ₹{scraped_price}, "
+                          f"which is below your target ₹{item.desired_price}")
+
+            # Update the product in DB
+            engine.product_service.update_product(product_info, product)
 
 
 @shared_task
 def scrape_popular_products():
+    print('Scrape popular products')
     engine = get_scraper()
     products = Product.objects.all()
 
@@ -32,13 +48,15 @@ def scrape_popular_products():
         if should_scrape(product):
             print(f"Scraping popular product: {product.title}")
             if product.product_link:
-                engine.scrape_product_url(product.product_link)
+                product_info =  engine.scrape_from_url(product.product_link)
+                engine.product_service.update_product(product_info, product)
             else:
                 engine.scrape(product.title)  # fallback
 
 
 @shared_task
 def scrape_search_queue():
+    print('Scraping search queue')
     engine = get_scraper()
     queue_items = SearchQueue.objects.filter(is_scraped=False)
 
@@ -51,6 +69,7 @@ def scrape_search_queue():
 
 @shared_task
 def increment_search_count(product_id):
+    print('Incrementing search count')
     try:
         product = Product.objects.get(id=product_id)
         product.search_count += 1
