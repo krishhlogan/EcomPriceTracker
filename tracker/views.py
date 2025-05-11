@@ -1,8 +1,11 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from .models import Product, Watchlist, SearchQueue
 from .serializers import ProductSerializer, WatchlistSerializer
+from tracker.tasks import increment_search_count  # Import the task
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
@@ -18,6 +21,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Check if the product already exists for the given keyword
         matching_products = Product.objects.filter(title__icontains=keyword)
         if matching_products.exists():
+            for product in matching_products:
+                increment_search_count.apply_async(args=[product.id])
             serializer = self.get_serializer(matching_products, many=True)
             return Response(serializer.data)
 
@@ -35,15 +40,21 @@ class WatchlistViewSet(viewsets.ModelViewSet):
     serializer_class = WatchlistSerializer
 
     def get_queryset(self):
-        # Filter by username
         username = self.request.query_params.get('username')
         if username:
             return Watchlist.objects.filter(username=username)
         return Watchlist.objects.all()
 
     def perform_create(self, serializer):
-        # Create watchlist entry with the provided username
         username = self.request.data.get('username')
-        if not username:
-            raise ValueError("Username is required for creating a watchlist entry.")
+        product = self.request.data.get('product')
+        desired_price = self.request.data.get('desired_price')
+
+        if not username or not product or not desired_price:
+            raise ValidationError("Username, product, and desired price are required.")
+
+        # Prevent duplicate entry
+        if Watchlist.objects.filter(username=username, product_id=product).exists():
+            raise ValidationError("This product is already in the watchlist for this user.")
+
         serializer.save(username=username)

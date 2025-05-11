@@ -22,3 +22,5 @@ class ScraperEngine:
             for product in products:
                 self.product_service.save_product(product)
             page += 1
+            if page == 3:
+                break

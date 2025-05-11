@@ -1,27 +1,84 @@
+import requests
 from bs4 import BeautifulSoup
-from .interfaces import IHTMLParser
+import re
 
-class FlipkartParser(IHTMLParser):
-    def parse(self, soup):
-        items = soup.select('._1AtVbE')
+class FlipkartParser:
+    def parse(self, soup: BeautifulSoup):
+        product_blocks = soup.select('div._75nlfW')
+        print(f"Total containers found: {len(product_blocks)}")
         parsed_items = []
 
-        for item in items:
-            title_tag = item.select_one('._4rR01T')
-            price_tag = item.select_one('._30jeq3')
-            rating_tag = item.select_one('._3LWZlK')
-            reviews_tag = item.select_one('span._2_R_DZ span span')
-            seller_tag = item.select_one('._1xb2I5')
-
-            if not title_tag or not price_tag:
+        for block in product_blocks:
+            product_link_tag = block.select_one('a[href*="pid"]')
+            if not product_link_tag:
                 continue
 
+            relative_link = product_link_tag['href']
+            product_url = f"https://www.flipkart.com{relative_link}"
+
+            seller = self.get_seller_name(product_url)
+
+            title_tag = block.select_one('div.KzDlHZ') or block.select_one('a.s1Q9rs')
+            price_tag = block.select_one('div.Nx9bqj._4b5DiR')
+            rating_tag = block.select_one('div.XQDdHH')
+            review_summary_tag = block.select_one('span.Wphh3N')
+
+            # Clean values
+            price = (
+                int(re.sub(r'[^\d]', '', price_tag.get_text()))
+                if price_tag else None
+            )
+
+            total_ratings = None
+            total_reviews = None
+
+            if review_summary_tag:
+                review_text = review_summary_tag.get_text()
+                match = re.search(r'([\d,]+)\s+Ratings.*?([\d,]+)\s+Reviews', review_text)
+                if match:
+                    total_ratings = int(match.group(1).replace(',', ''))
+                    total_reviews = int(match.group(2).replace(',', ''))
+
             parsed_items.append({
-                'title': title_tag.text.strip(),
-                'price': float(price_tag.text.strip().replace('₹', '').replace(',', '')),
-                'rating': float(rating_tag.text.strip()) if rating_tag else None,
-                'num_reviews': int(reviews_tag.text.split()[0].replace(',', '')) if reviews_tag else None,
-                'seller': seller_tag.text.strip() if seller_tag else "Flipkart"
+                'title': title_tag.get_text(strip=True) if title_tag else 'N/A',
+                'price': price,
+                'rating': rating_tag.get_text(strip=True) if rating_tag else '-1',
+                'num_ratings': total_ratings,
+                'num_reviews': total_reviews,
+                'seller': seller,
+                'product_link': product_url
             })
-        print('Parsed items',parsed_items)
+
         return parsed_items
+
+    def get_seller_name(self, product_url):
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        try:
+            resp = requests.get(product_url, headers=headers)
+            if resp.status_code == 200:
+                product_soup = BeautifulSoup(resp.content, 'html.parser')
+                seller_tag = product_soup.find('div', {'id': 'sellerName'})
+                # print(product_url,seller_tag)
+                return seller_tag.get_text(strip=True) if seller_tag else 'N/A'
+        except Exception as e:
+            print("Error fetching seller:", e)
+        return 'N/A'
+
+#
+# def scrape_flipkart(keyword):
+#     headers = {'User-Agent': 'Mozilla/5.0'}
+#     url = f"https://www.flipkart.com/search?q={keyword}"
+#     response = requests.get(url, headers=headers)
+#     if response.status_code != 200:
+#         print("Failed to fetch search results.")
+#         return []
+#
+#     soup = BeautifulSoup(response.content, 'html.parser')
+#     parser = FlipkartParser()
+#     return parser.parse(soup)
+#
+# if __name__ == "__main__":
+#     keyword = input("Enter a product keyword to search: ")
+#     products = scrape_flipkart(keyword)
+#     for i, product in enumerate(products, start=1):
+#         print(f"{i}. {product}")

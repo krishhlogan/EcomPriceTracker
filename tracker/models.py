@@ -5,7 +5,13 @@ class Product(models.Model):
     seller = models.CharField(max_length=255, null=True, blank=True)
     rating = models.FloatField(null=True, blank=True)
     num_reviews = models.IntegerField(null=True, blank=True)
+    num_ratings = models.IntegerField(null=True,blank=True)
+    product_link = models.URLField(null=True, blank=True)
+    search_count = models.PositiveIntegerField(default=0)
     last_scraped = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('title', 'product_link')
 
     def __str__(self):
         return self.title
